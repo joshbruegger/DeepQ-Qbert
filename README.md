@@ -1,5 +1,19 @@
 # DeepQbert
 
-Playing Atari Games with Deep Reinforcement Learning
+Playing Atari Games with Deep Reinforcement Learning. This is for my uni's Deep Learning course.
 
-This is for my uni's Deep Learning course.
+## Setup
+
+This project uses the [uv package manager](https://docs.astral.sh/uv/getting-started/installation/).
+
+1. Clone this repository:
+
+   ```bash
+   git clone https://github.com/joshbruegger/DeepQbert.git
+   cd DeepQBert
+   ```
+
+2. Create local environment and install dependencies:
+   ```bash
+   uv sync
+   ```
