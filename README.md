@@ -17,3 +17,8 @@ This project uses the [uv package manager](https://docs.astral.sh/uv/getting-sta
    ```bash
    uv sync
    ```
+
+3. `gymnasium[other]` is needed for video output
+   ```py
+   pip install gymnasium "gymnasium[other]"
+   ```
