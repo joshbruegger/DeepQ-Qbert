@@ -68,7 +68,7 @@ env = gym.wrappers.RecordVideo(
 n_actions = env.action_space.n
 network = DQN(QUEUE_N_FRAMES, n_actions).to(device)
 
-num_episodes = 100
+num_episodes = 5
 
 memory = ReplayMemory(10000)
 
