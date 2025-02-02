@@ -6,18 +6,12 @@
 #SBATCH --mem=16G
 #SBATCH --ntasks=9
 
-echo "Loading modules..."
-module update
 module purge
 
-module load CUDA/11.7.0
-module load cuDNN/8.4.1.50-CUDA-11.7.0
-module load OpenCV/4.6.0-foss-2022a-contrib
-module load Boost/1.79.0-GCC-11.3.0
-
-# module list
-
 export PATH=$HOME/.local/bin:$PATH
+
+# Uncomment to ensure standard python
+# uv python install --reinstall
 
 echo "Setting up environment..."
 uv venv
@@ -27,6 +21,6 @@ echo "Syncing packages..."
 uv sync
 
 echo "Running training script..."
-uv run deepqbert.py
+uv run deepqbert.py --load-checkpoint latest --num-episodes 1000000 --checkpoint-freq 100 --max-frames 10000000 --env-name ALE/Qbert-v5
 
 deactivate

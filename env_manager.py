@@ -1,5 +1,6 @@
 import math
 import random
+from time import time
 
 import ale_py
 import gymnasium as gym
@@ -12,22 +13,24 @@ gym.register_envs(ale_py)  # Tell the IDE that ale_py is used
 
 
 class EnvManager:
-    def __init__(self):
+    def __init__(self, env_name: str):
         self.steps = 0
+
+        self.env_name = env_name
 
         # Make the environment
         self.env = gym.make(
-            "ALE/Pong-v5", render_mode="rgb_array", obs_type="grayscale", frameskip=4
+            env_name, render_mode="rgb_array", obs_type="grayscale", frameskip=4
         )
         self.env = ResizeObservation(self.env, (110, 84))
         self.env = FrameStackObservation(self.env, g.QUEUE_N_FRAMES)
 
-    def setup_recording(self, starting_episode: int = 0, frequency: int = 2):
+    def setup_recording(self, frequency: int = 2):
         self.env = gym.wrappers.RecordVideo(
             self.env,
-            episode_trigger=lambda num: (num + starting_episode) % 2 == 0,
-            video_folder="videos",
-            name_prefix=f"video-episode-{starting_episode}-",
+            episode_trigger=lambda num: (num) % frequency == 0,
+            video_folder=f"videos/{self.env_name.replace('/', '-')}",
+            name_prefix=f"episode{time()}-",
         )
 
     def select_action(self, state, network):

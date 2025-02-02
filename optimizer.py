@@ -41,7 +41,7 @@ def optimize(network: torch.nn.Module, memory: ReplayMemory):
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
     # Finally, optimize
-    optimizer = optim.AdamW(network.parameters(), lr=g.LR, amsgrad=True)
+    optimizer = optim.RMSprop(network.parameters(), lr=g.LR)
     optimizer.zero_grad()
     loss.backward()
 

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -88,7 +89,11 @@ def plot_data(
             color=config.avg_color,
         )
 
+    # Ensure the directory exists
+    save_path = Path(config.filepath)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
     # Finalize and save plot
     plt.tight_layout()
-    fig.savefig(config.filepath)
+    fig.savefig(save_path)
     plt.close(fig)  # Clean up resources

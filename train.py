@@ -3,12 +3,38 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from progress_table import ProgressTable
 
+# from progress_table import ProgressTable
 import globals as g
 from env_manager import EnvManager
 from optimizer import optimize
 from replay_memory import ReplayMemory
+
+
+def load_checkpoint(network: torch.nn.Module, checkpoint_path: Path):
+    """Load model checkpoint and return training state.
+
+    Args:
+        network: The network to load weights into
+        checkpoint_path: Path to the checkpoint file
+
+    Returns:
+        Tuple of (episodes_rewards, last_episode, checkpoint_rewards, total_frames)
+    """
+    if checkpoint_path.exists():
+        checkpoint = torch.load(checkpoint_path)
+        network.load_state_dict(checkpoint["model_state_dict"])
+        print(f"Loaded checkpoint from {checkpoint_path}")
+        print(f"Last Episode: {checkpoint['episode']}")
+        return (
+            checkpoint["episodes_rewards"],
+            checkpoint["episode"],
+            checkpoint.get("checkpoint_rewards", {}),
+            checkpoint.get(
+                "total_frames", 0
+            ),  # Return total_frames, default to 0 if not found
+        )
+    return None, 0, {}, 0  # Return 0 for total_frames if no checkpoint exists
 
 
 def train(
@@ -18,26 +44,48 @@ def train(
     memory: ReplayMemory,
     checkpoint_dir: str = "checkpoints",
     checkpoint_freq: int = 100,  # Save every 100 episodes
-    starting_episode: int = 0,  # Add starting episode parameter
-    checkpoint_rewards: dict = None,  # Add checkpoint rewards parameter
+    load_checkpoint_type: str = "none",  # Can be "best", "latest", or "none"
+    max_frames: int = None,  # Maximum number of frames to train for
 ):
-    episodes_rewards = np.array([])
-    best_reward = float("-inf")
-    checkpoint_rewards = checkpoint_rewards or {}  # Initialize empty dict if None
-
     # Create checkpoint directory if it doesn't exist
     checkpoint_path = Path(checkpoint_dir)
     checkpoint_path.mkdir(exist_ok=True)
 
-    # Initialize progress table
-    table = ProgressTable(
-        pbar_style="circle",
-        pbar_embedded=False,
-    )
+    # Load checkpoint if specified
+    episodes_rewards = np.array([])
+    starting_episode = 0
+    checkpoint_rewards = {}
+    total_frames = 0  # Initialize total frame counter
 
-    for episode in table(
-        range(starting_episode, starting_episode + num_episodes), description="Training"
-    ):
+    if load_checkpoint_type in ["best", "latest"]:
+        checkpoint_file = (
+            "best_model.pt" if load_checkpoint_type == "best" else "latest_model.pt"
+        )
+        loaded_rewards, last_episode, loaded_checkpoint_rewards, loaded_total_frames = (
+            load_checkpoint(network, checkpoint_path / checkpoint_file)
+        )
+        if loaded_rewards is not None:
+            episodes_rewards = np.array(loaded_rewards)
+            starting_episode = last_episode + 1
+            checkpoint_rewards = loaded_checkpoint_rewards
+            total_frames = loaded_total_frames  # Restore total frames from checkpoint
+
+    best_reward = float("-inf")
+
+    # # Initialize progress table
+    # table = ProgressTable(
+    #     pbar_style="circle",
+    #     pbar_embedded=False,
+    # )
+
+    for episode in range(starting_episode, starting_episode + num_episodes):
+        # Check if we've exceeded max frames
+        if max_frames is not None and total_frames >= max_frames:
+            print(
+                f"\nStopping training - reached {total_frames} frames (max: {max_frames})"
+            )
+            break
+
         # Initialise the environment
         obs, _ = envManager.env.reset()
 
@@ -73,11 +121,10 @@ def train(
 
             if terminated or truncated:
                 episodes_rewards = np.append(episodes_rewards, episode_reward)
+                total_frames += t + 1  # Update total frames
                 # Update progress metrics
-                table["Episode"] = episode
-                table["Duration (steps)"] = t + 1
-                table.update(
-                    "Reward", episode_reward, aggregate="mean", color="blue bold"
+                print(
+                    f"Episode: {episode}, Duration: {t + 1}, Total Frames: {total_frames}"
                 )
 
                 # Save periodic checkpoint
@@ -89,6 +136,7 @@ def train(
                         "episodes_rewards": episodes_rewards,
                         "checkpoint_rewards": checkpoint_rewards,  # Save all checkpoint rewards
                         "current_reward": episode_reward,  # Save current episode reward
+                        "total_frames": total_frames,  # Save total frames
                     }
                     torch.save(
                         checkpoint, checkpoint_path / f"checkpoint_episode_{episode}.pt"
@@ -103,10 +151,11 @@ def train(
                         "episodes_rewards": episodes_rewards,
                         "best_reward": best_reward,
                         "checkpoint_rewards": checkpoint_rewards,  # Include checkpoint rewards history
+                        "total_frames": total_frames,  # Save total frames
                     }
                     torch.save(checkpoint, checkpoint_path / "best_model.pt")
 
-                table.next_row()
+                # table.next_row()
                 break
 
     # Save latest checkpoint
@@ -117,8 +166,14 @@ def train(
         "episodes_rewards": episodes_rewards,
         "checkpoint_rewards": checkpoint_rewards,  # Include complete checkpoint rewards history
         "latest_reward": episode_reward,  # Save latest episode reward
+        "total_frames": total_frames,  # Save total frames
     }
     torch.save(checkpoint, checkpoint_path / "latest_model.pt")
 
-    table.close()
+    # table.close()
+    # print summary
+    print(f"Training complete. Total frames: {total_frames}")
+    print(f"Best reward: {best_reward}")
+    print(f"Average reward: {np.mean(episodes_rewards)}")
+    print(f"Total episodes: {len(episodes_rewards)}")
     return episodes_rewards
