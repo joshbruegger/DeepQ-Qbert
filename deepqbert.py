@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
 
-import gymnasium as gym
 import numpy as np
 import torch
 
@@ -72,7 +71,7 @@ elif args.load_checkpoint == "latest":
     )
 
 
-envManager.setup_recording(starting_episode)
+envManager.setup_recording(starting_episode, args.checkpoint_freq)
 
 # Make the memory
 memory = ReplayMemory(10000)
