@@ -6,6 +6,7 @@ import torch
 
 # from progress_table import ProgressTable
 import globals as g
+import plotter
 from env_manager import EnvManager
 from optimizer import optimize
 from replay_memory import ReplayMemory
@@ -35,6 +36,29 @@ def load_checkpoint(network: torch.nn.Module, checkpoint_path: Path):
             ),  # Return total_frames, default to 0 if not found
         )
     return None, 0, {}, 0  # Return 0 for total_frames if no checkpoint exists
+
+
+def save_checkpoint(
+    checkpoint_path: Path,
+    network: torch.nn.Module,
+    episode: int,
+    episodes_rewards: np.ndarray,
+    checkpoint_rewards: dict,
+    total_frames: int,
+    filename: str,
+    extra_data: dict = None,
+):
+    checkpoint = {
+        "episode": episode,
+        "model_state_dict": network.state_dict(),
+        "episodes_rewards": episodes_rewards,
+        "checkpoint_rewards": checkpoint_rewards,
+        "total_frames": total_frames,
+    }
+    if extra_data:
+        checkpoint.update(extra_data)
+    torch.save(checkpoint, checkpoint_path / filename)
+    print(f"Saved checkpoint to {checkpoint_path / filename}")
 
 
 def train(
@@ -130,45 +154,58 @@ def train(
                 # Save periodic checkpoint
                 if (episode + 1) % checkpoint_freq == 0:
                     checkpoint_rewards[episode] = episode_reward
-                    checkpoint = {
-                        "episode": episode,
-                        "model_state_dict": network.state_dict(),
-                        "episodes_rewards": episodes_rewards,
-                        "checkpoint_rewards": checkpoint_rewards,  # Save all checkpoint rewards
-                        "current_reward": episode_reward,  # Save current episode reward
-                        "total_frames": total_frames,  # Save total frames
-                    }
-                    torch.save(
-                        checkpoint, checkpoint_path / f"checkpoint_episode_{episode}.pt"
+                    save_checkpoint(
+                        checkpoint_path,
+                        network,
+                        episode,
+                        episodes_rewards,
+                        checkpoint_rewards,
+                        total_frames,
+                        f"checkpoint_episode_{episode}.pt",
+                        {"current_reward": episode_reward},
+                    )
+                    plotter.plot_data(
+                        x=np.arange(len(episodes_rewards)),
+                        y=episodes_rewards,
+                        config=plotter.PlotConfig(
+                            title="Episode Rewards",
+                            xlabel="Episode",
+                            ylabel="Reward",
+                            running_avg=True,
+                            window_size=100,
+                            filepath=f"plots/{envManager.clean_env_name}/rewards_{len(episodes_rewards)}.png",
+                        ),
                     )
 
                 # Save best model
                 if episode_reward > best_reward:
                     best_reward = episode_reward
-                    checkpoint = {
-                        "episode": episode,
-                        "model_state_dict": network.state_dict(),
-                        "episodes_rewards": episodes_rewards,
-                        "best_reward": best_reward,
-                        "checkpoint_rewards": checkpoint_rewards,  # Include checkpoint rewards history
-                        "total_frames": total_frames,  # Save total frames
-                    }
-                    torch.save(checkpoint, checkpoint_path / "best_model.pt")
+                    save_checkpoint(
+                        checkpoint_path,
+                        network,
+                        episode,
+                        episodes_rewards,
+                        checkpoint_rewards,
+                        total_frames,
+                        "best_model.pt",
+                        {"best_reward": best_reward},
+                    )
 
                 # table.next_row()
                 break
 
     # Save latest checkpoint
     checkpoint_rewards[num_episodes - 1] = episode_reward
-    checkpoint = {
-        "episode": num_episodes - 1,
-        "model_state_dict": network.state_dict(),
-        "episodes_rewards": episodes_rewards,
-        "checkpoint_rewards": checkpoint_rewards,  # Include complete checkpoint rewards history
-        "latest_reward": episode_reward,  # Save latest episode reward
-        "total_frames": total_frames,  # Save total frames
-    }
-    torch.save(checkpoint, checkpoint_path / "latest_model.pt")
+    save_checkpoint(
+        checkpoint_path,
+        network,
+        num_episodes - 1,
+        episodes_rewards,
+        checkpoint_rewards,
+        total_frames,
+        "latest_model.pt",
+        {"latest_reward": episode_reward},
+    )
 
     # table.close()
     # print summary

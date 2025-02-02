@@ -16,7 +16,7 @@ class EnvManager:
     def __init__(self, env_name: str):
         self.steps = 0
 
-        self.env_name = env_name
+        self.clean_env_name = env_name.replace("/", "-")
 
         # Make the environment
         self.env = gym.make(
@@ -29,7 +29,7 @@ class EnvManager:
         self.env = gym.wrappers.RecordVideo(
             self.env,
             episode_trigger=lambda num: (num) % frequency == 0,
-            video_folder=f"videos/{self.env_name.replace('/', '-')}",
+            video_folder=f"videos/{self.clean_env_name}",
             name_prefix=f"episode{time()}-",
         )
 
