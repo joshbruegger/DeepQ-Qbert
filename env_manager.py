@@ -22,12 +22,12 @@ class EnvManager:
         self.env = ResizeObservation(self.env, (110, 84))
         self.env = FrameStackObservation(self.env, g.QUEUE_N_FRAMES)
 
-        # Record what happens
+    def setup_recording(self, starting_episode: int = 0):
         self.env = gym.wrappers.RecordVideo(
             self.env,
-            episode_trigger=lambda num: num % 2 == 0,
+            episode_trigger=lambda num: (num + starting_episode) % 2 == 0,
             video_folder="videos",
-            name_prefix="video-",
+            name_prefix=f"video-episode-{starting_episode}-",
         )
 
     def select_action(self, state, network):

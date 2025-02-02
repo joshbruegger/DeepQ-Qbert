@@ -18,9 +18,12 @@ def train(
     memory: ReplayMemory,
     checkpoint_dir: str = "checkpoints",
     checkpoint_freq: int = 100,  # Save every 100 episodes
+    starting_episode: int = 0,  # Add starting episode parameter
+    checkpoint_rewards: dict = None,  # Add checkpoint rewards parameter
 ):
     episodes_rewards = np.array([])
     best_reward = float("-inf")
+    checkpoint_rewards = checkpoint_rewards or {}  # Initialize empty dict if None
 
     # Create checkpoint directory if it doesn't exist
     checkpoint_path = Path(checkpoint_dir)
@@ -32,7 +35,9 @@ def train(
         pbar_embedded=False,
     )
 
-    for episode in table(range(num_episodes), description="Training"):
+    for episode in table(
+        range(starting_episode, starting_episode + num_episodes), description="Training"
+    ):
         # Initialise the environment
         obs, _ = envManager.env.reset()
 
@@ -77,10 +82,13 @@ def train(
 
                 # Save periodic checkpoint
                 if (episode + 1) % checkpoint_freq == 0:
+                    checkpoint_rewards[episode] = episode_reward
                     checkpoint = {
                         "episode": episode,
                         "model_state_dict": network.state_dict(),
                         "episodes_rewards": episodes_rewards,
+                        "checkpoint_rewards": checkpoint_rewards,  # Save all checkpoint rewards
+                        "current_reward": episode_reward,  # Save current episode reward
                     }
                     torch.save(
                         checkpoint, checkpoint_path / f"checkpoint_episode_{episode}.pt"
@@ -94,19 +102,23 @@ def train(
                         "model_state_dict": network.state_dict(),
                         "episodes_rewards": episodes_rewards,
                         "best_reward": best_reward,
+                        "checkpoint_rewards": checkpoint_rewards,  # Include checkpoint rewards history
                     }
                     torch.save(checkpoint, checkpoint_path / "best_model.pt")
 
                 table.next_row()
                 break
 
-    # Save final checkpoint
+    # Save latest checkpoint
+    checkpoint_rewards[num_episodes - 1] = episode_reward
     checkpoint = {
         "episode": num_episodes - 1,
         "model_state_dict": network.state_dict(),
         "episodes_rewards": episodes_rewards,
+        "checkpoint_rewards": checkpoint_rewards,  # Include complete checkpoint rewards history
+        "latest_reward": episode_reward,  # Save latest episode reward
     }
-    torch.save(checkpoint, checkpoint_path / "final_model.pt")
+    torch.save(checkpoint, checkpoint_path / "latest_model.pt")
 
     table.close()
     return episodes_rewards
