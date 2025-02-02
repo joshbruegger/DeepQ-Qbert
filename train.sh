@@ -15,12 +15,18 @@ module load cuDNN/8.4.1.50-CUDA-11.7.0
 module load OpenCV/4.6.0-foss-2022a-contrib
 module load Boost/1.79.0-GCC-11.3.0
 
-module list
+# module list
 
 export PATH=$HOME/.local/bin:$PATH
 
+echo "Setting up environment..."
+uv venv
+source .venv/bin/activate
+
+echo "Syncing packages..."
 uv sync
 
+echo "Running training script..."
 uv run deepqbert.py
 
 deactivate
