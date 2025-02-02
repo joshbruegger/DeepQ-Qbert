@@ -1,113 +1,43 @@
-from collections import deque
-from itertools import count
-import math
-import random
-import gymnasium as gym
-from gymnasium.wrappers import ResizeObservation, FrameStackObservation
+import numpy as np
 
-
-import ale_py
-
-import torch
-
+import globals as g
+import plotter
+from env_manager import EnvManager
 from model import DQN
 from replay_memory import ReplayMemory
+from train import train
 
-QUEUE_N_FRAMES = 4
-
-BATCH_SIZE = 32
-EPS_START = 1
-EPS_END = 0.1
-EPS_DECAY = 1000000
-
-
-# def shift_state_queue(state, obs):
-#     state = torch.roll(state, shifts=-1, dims=0)
-#     state[0] = torch.tensor(obs, dtype=torch.float32, device=device)
-#     return state
-
-
-steps_done = 0
-def select_action(state, network):
-    global steps_done
-    sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1 * steps_done / EPS_DECAY)
-    steps_done += 1
-
-    if sample > eps_threshold:
-        with torch.no_grad():
-            return network(state).max(1).indices.view(1,1)
-    else:
-        return torch.tensor([env.action_space.sample()], device=device, dtype=torch.long)
-
-# Pytorch setup
-device = torch.device(
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
-)
-
-gym.register_envs(ale_py)
-
-# Prepare the environment
-env = gym.make("ALE/Pong-v5", render_mode="rgb_array", obs_type="grayscale", frameskip=4)
-env = ResizeObservation(env, (110, 84))
-env = FrameStackObservation(env, QUEUE_N_FRAMES)
-
-# Record what happens
-env = gym.wrappers.RecordVideo(
-    env,
-    episode_trigger=lambda num: num % 2 == 0,
-    video_folder="videos",
-    name_prefix="video-",
-)
+# Make the environment
+envManager = EnvManager()
 
 # Make the network
-n_actions = env.action_space.n
-network = DQN(QUEUE_N_FRAMES, n_actions).to(device)
+n_actions = envManager.env.action_space.n
+network = DQN(g.QUEUE_N_FRAMES, n_actions).to(g.DEVICE)
 
-num_episodes = 5
-
+# Make the memory
 memory = ReplayMemory(10000)
 
-episodes_durations = []
-for i_episode in range(num_episodes):
-    # Initialise the environment
-    obs, info = env.reset()
+episodes_rewards = train(
+    envManager=envManager,
+    network=network,
+    num_episodes=5,
+    memory=memory,
+    checkpoint_dir="checkpoints",
+    checkpoint_freq=2,  # Save every 2 episodes since we're only running 5 episodes
+)
 
-    state = torch.tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
+plotter.plot_data(
+    x=np.arange(len(episodes_rewards)),
+    y=episodes_rewards,
+    config=plotter.PlotConfig(
+        title="Episode Rewards",
+        xlabel="Episode",
+        ylabel="Reward",
+        running_avg=True,
+        window_size=100,
+        filepath="plots/rewards.png",
+    ),
+)
 
-    # iterate indefinetly
-    for t in count():
-        action = select_action(state, network) # Infer an action
-        # Take the action
-        observation, reward, terminated, truncated, _ = env.step(action.item())
-        reward = torch.tensor([reward], device=device)
-
-        if terminated:
-            next_state = None
-        else:
-            next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
-
-        # Store the trastition in memory
-        memory.push(state, action, next_state, reward)
-
-        state = next_state
-
-        # Learn from our mistakes
-        # optimize_model()
-
-        if terminated or truncated:
-            episodes_durations.append(t + 1)
-            # plot_durations()
-            break
-
-print("Complete")
-
-#plot stuff
-
-env.close()
-
-
+# Close the environment
+envManager.env.close()

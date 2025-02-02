@@ -2,6 +2,9 @@
 
 Playing Atari Games with Deep Reinforcement Learning. This is for my uni's Deep Learning course.
 
+Code adapted from:
+https://github.com/pytorch/tutorials/blob/main/intermediate_source/reinforcement_q_learning.py
+
 ## Setup
 
 This project uses the [uv package manager](https://docs.astral.sh/uv/getting-started/installation/).
@@ -16,9 +19,9 @@ This project uses the [uv package manager](https://docs.astral.sh/uv/getting-sta
 2. Create local environment and install dependencies:
    ```bash
    uv sync
-   ```
+   ``` 
 
-3. `gymnasium[other]` is needed for video output
-   ```py
-   pip install gymnasium "gymnasium[other]"
+3. Run the program:
+   ```bash
+   python deepqbert.py
    ```
