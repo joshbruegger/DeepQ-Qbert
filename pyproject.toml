@@ -11,5 +11,6 @@ dependencies = [
     "pyqt6>=6.8.0",
     "ruff>=0.8.6",
     "seaborn>=0.13.2",
+    "stable-baselines3[extra]>=2.5.0",
     "torch>=2.5.1",
 ]

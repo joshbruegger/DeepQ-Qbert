@@ -21,6 +21,6 @@ echo "Syncing packages..."
 uv sync
 
 echo "Running training script..."
-uv run deepqbert.py --load-checkpoint latest --num-episodes 1000000 --checkpoint-freq 20 --max-frames 10000000 --env-name ALE/Qbert-v5
+uv run deepqbert.py --load-checkpoint latest --num-episodes 1000000 --checkpoint-freq 20 --max-frames 10000000 --env-name ALE/Qbert-v5 --no-recording
 
 deactivate

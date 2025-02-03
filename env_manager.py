@@ -5,7 +5,16 @@ from time import time
 import ale_py
 import gymnasium as gym
 import torch
-from gymnasium.wrappers import FrameStackObservation, ResizeObservation
+from gymnasium.wrappers import (
+    FrameStackObservation,
+    RecordEpisodeStatistics,
+    ResizeObservation,
+)
+from stable_baselines3.common.atari_wrappers import (
+    ClipRewardEnv,
+    EpisodicLifeEnv,
+    FireResetEnv,
+)
 
 import globals as g
 
@@ -22,6 +31,15 @@ class EnvManager:
         self.env = gym.make(
             env_name, render_mode="rgb_array", obs_type="grayscale", frameskip=4
         )
+        self.env = RecordEpisodeStatistics(self.env)
+
+        self.env = EpisodicLifeEnv(self.env)
+
+        if "FIRE" in self.env.unwrapped.get_action_meanings():
+            self.env = FireResetEnv(self.env)
+
+        self.env = ClipRewardEnv(self.env)
+
         self.env = ResizeObservation(self.env, (110, 84))
         self.env = FrameStackObservation(self.env, g.QUEUE_N_FRAMES)
 

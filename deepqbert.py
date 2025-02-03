@@ -41,6 +41,11 @@ parser.add_argument(
     default="ALE/Pong-v5",
     help="Environment name. Can be: ALE/Pong-v5, ALE/BeamRider-v5, ALE/Qbert-v5, ALE/Breakout-v5, ALE/Seaquest-v5, ALE/Pong-v5",
 )
+parser.add_argument(
+    "--no-recording",
+    action="store_true",
+    help="Disable recording",
+)
 args = parser.parse_args()
 
 # clean up the env name for the checkpoint directory
@@ -51,7 +56,8 @@ envManager = EnvManager(args.env_name)
 # Make the network
 network = DQN(g.QUEUE_N_FRAMES, envManager.env.action_space.n).to(g.DEVICE)
 
-envManager.setup_recording(args.checkpoint_freq)
+if not args.no_recording:
+    envManager.setup_recording(args.checkpoint_freq)
 
 # Make the memory
 memory = ReplayMemory(1000000)
