@@ -156,7 +156,6 @@ source = { virtual = "." }
 dependencies = [
     { name = "ale-py" },
     { name = "gymnasium", extra = ["other"] },
-    { name = "progress-table" },
     { name = "pyqt6" },
     { name = "ruff" },
     { name = "seaborn" },
@@ -168,7 +167,6 @@ dependencies = [
 requires-dist = [
     { name = "ale-py", specifier = ">=0.10.1" },
     { name = "gymnasium", extras = ["other"], specifier = ">=1.0.0" },
-    { name = "progress-table", specifier = ">=2.3.0" },
     { name = "pyqt6", specifier = ">=6.8.0" },
     { name = "ruff", specifier = ">=0.8.6" },
     { name = "seaborn", specifier = ">=0.13.2" },
@@ -928,15 +926,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/bd/b9/1cfff8f6a797ea99b
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/f5/cab5cf6a540c31f5099043de0ae43990fd9cf66f75ecb5e9f254a4e4d4ee/proglog-0.1.10-py3-none-any.whl", hash = "sha256:19d5da037e8c813da480b741e3fa71fb1ac0a5b02bf21c41577c7f327485ec50", size = 6114 },
 ]
-
-[[package]]
-name = "progress-table"
-version = "2.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "colorama" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/30/08/44fdfa6fc22766b9a13d4e8ab9292a0f7a7996764abf2b33f1b0bfd5c48d/progress_table-2.3.0.tar.gz", hash = "sha256:c7aff650be5fa210a490acbcf13956035b902c5cb861e536a92344cb101a5cdb", size = 28550 }
 
 [[package]]
 name = "protobuf"
