@@ -7,7 +7,7 @@ import plotter
 from env_manager import EnvManager
 from model import DQN
 from replay_memory import ReplayMemory
-from train import train
+from train import Trainer
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Train DeepQbert")
@@ -62,12 +62,17 @@ if not args.no_recording:
 # Make the memory
 memory = ReplayMemory(1000000)
 
-episodes_rewards = train(
-    envManager=envManager,
+# Create trainer instance
+trainer = Trainer(
+    env_manager=envManager,
     network=network,
-    num_episodes=args.num_episodes,
     memory=memory,
     checkpoint_dir=f"checkpoints/{env_name}",
+)
+
+# Train the model
+episodes_rewards = trainer.train(
+    num_episodes=args.num_episodes,
     checkpoint_freq=args.checkpoint_freq,
     load_checkpoint_type=args.load_checkpoint,
     max_frames=args.max_frames,
