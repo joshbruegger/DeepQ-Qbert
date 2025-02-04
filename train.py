@@ -17,13 +17,17 @@ class Trainer:
         env_manager: EnvManager,
         network: torch.nn.Module,
         memory: ReplayMemory,
-        checkpoint_dir: str = "checkpoints",
+        output_dir: str = "output",
     ):
         self.env_manager = env_manager
         self.network = network
         self.memory = memory
-        self.checkpoint_path = Path(checkpoint_dir)
-        self.checkpoint_path.mkdir(exist_ok=True, parents=True)
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True, parents=True)
+        self.checkpoint_dir = Path(self.output_dir / "checkpoints")
+        self.checkpoint_dir.mkdir(exist_ok=True, parents=True)
+        self.plots_dir = Path(self.output_dir / "plots")
+        self.plots_dir.mkdir(exist_ok=True, parents=True)
 
         # Training state
         self.episodes_rewards = np.array([])
@@ -42,14 +46,16 @@ class Trainer:
         checkpoint_file = (
             "best_model.pt" if checkpoint_type == "best" else "latest_model.pt"
         )
-        checkpoint_path = self.checkpoint_path / checkpoint_file
+        checkpoint_path = self.checkpoint_dir / checkpoint_file
 
         if checkpoint_path.exists():
             checkpoint = torch.load(checkpoint_path)
             self.network.load_state_dict(checkpoint["model_state_dict"])
-            print(f"Loaded checkpoint from {checkpoint_path}")
-            print(f"Last Episode: {checkpoint['episode']}")
+            print(f"Loaded checkpoint from {checkpoint_path}", flush=True)
+            print(f"Last Episode: {checkpoint['episode']}", flush=True)
 
+            self.episodes_loss = np.array(checkpoint["episodes_loss"])
+            self.episodes_max_q = np.array(checkpoint["episodes_max_q"])
             self.episodes_rewards = np.array(checkpoint["episodes_rewards"])
             self.starting_episode = checkpoint["episode"] + 1
             self.checkpoint_rewards = checkpoint.get("checkpoint_rewards", {})
@@ -74,20 +80,41 @@ class Trainer:
             "episodes_rewards": self.episodes_rewards,
             "checkpoint_rewards": self.checkpoint_rewards,
             "total_frames": self.total_frames,
+            "episodes_loss": self.episodes_loss,
+            "episodes_max_q": self.episodes_max_q,
         }
         if extra_data:
             checkpoint.update(extra_data)
 
         # save checkpoint
-        torch.save(checkpoint, self.checkpoint_path / filename)
-        print(f"Saved checkpoint to {self.checkpoint_path / filename}")
+        torch.save(checkpoint, self.checkpoint_dir / filename)
+        print(f"Saved checkpoint to {self.checkpoint_dir / filename}", flush=True)
+
+    def plot_data(self):
+        data = {
+            "rewards": self.episodes_rewards,
+            "q_values": self.episodes_max_q,
+            "losses": self.episodes_loss,
+        }
+        plotter.plot_data(
+            x=np.arange(len(self.episodes_rewards)),
+            data=data,
+            config=plotter.PlotConfig(
+                title="Training Metrics",
+                xlabel="Episode",
+                ylabel="Value",
+                running_avg=True,
+                window_size=100,
+                filepath=f"{self.plots_dir}/metrics_{len(self.episodes_rewards)}.png",
+            ),
+        )
 
     def train_episode(self):
         """Run a single training episode and return statistics"""
         obs, _ = self.env_manager.env.reset()
         state = torch.tensor(obs, dtype=torch.float32, device=g.DEVICE).unsqueeze(0)
 
-        episode_reward = 0
+        avg_reward = 0
         avg_loss = 0
         avg_max_q = 0
 
@@ -98,7 +125,7 @@ class Trainer:
             observation, reward, terminated, truncated, _ = self.env_manager.env.step(
                 action.item()
             )
-            episode_reward += reward
+            avg_reward += reward
 
             reward = torch.tensor([reward], device=g.DEVICE)
             next_state = (
@@ -122,7 +149,7 @@ class Trainer:
             if terminated or truncated:
                 break
 
-        return episode_reward, avg_loss / (t + 1), avg_max_q / (t + 1), t + 1
+        return avg_reward / (t + 1), avg_loss / (t + 1), avg_max_q / (t + 1), t + 1
 
     def train(
         self,
@@ -141,49 +168,40 @@ class Trainer:
             # Check if we've exceeded max frames
             if max_frames is not None and self.total_frames >= max_frames:
                 print(
-                    f"\nStopping training - reached {self.total_frames} frames (max: {max_frames})"
+                    f"\nStopping training - reached {self.total_frames} frames (max: {max_frames})",
+                    flush=True,
                 )
                 break
 
             # Run episode
-            episode_reward, avg_loss, avg_max_q, steps = self.train_episode()
+            avg_reward, avg_loss, avg_max_q, steps = self.train_episode()
             self.total_frames += steps
 
             # Update statistics
-            self.episodes_rewards = np.append(self.episodes_rewards, episode_reward)
+            self.episodes_rewards = np.append(self.episodes_rewards, avg_reward)
             self.episodes_loss = np.append(self.episodes_loss, avg_loss)
             self.episodes_max_q = np.append(self.episodes_max_q, avg_max_q)
 
             print(
                 f"Episode: {episode}, Duration: {steps}, Frames: {self.total_frames}, "
-                f"Loss: {avg_loss:.4f}, Max Q: {avg_max_q:.4f}, Reward: {episode_reward:.4f}"
+                f"Loss: {avg_loss:.4f}, Max Q: {avg_max_q:.4f}, Reward: {avg_reward:.4f}",
+                flush=True,
             )
 
             # Save periodic checkpoint
             if (episode + 1) % checkpoint_freq == 0:
-                self.checkpoint_rewards[episode] = episode_reward
+                self.checkpoint_rewards[episode] = avg_reward
                 self.save_checkpoint(
                     episode,
                     f"checkpoint_episode_{episode}.pt",
-                    {"current_reward": episode_reward},
+                    {"current_reward": avg_reward},
                 )
 
-                plotter.plot_data(
-                    x=np.arange(len(self.episodes_rewards)),
-                    y=self.episodes_rewards,
-                    config=plotter.PlotConfig(
-                        title="Episode Rewards",
-                        xlabel="Episode",
-                        ylabel="Reward",
-                        running_avg=True,
-                        window_size=100,
-                        filepath=f"plots/{self.env_manager.clean_env_name}/rewards_{len(self.episodes_rewards)}.png",
-                    ),
-                )
+                self.plot_data()
 
             # Save best model
-            if episode_reward > self.best_reward:
-                self.best_reward = episode_reward
+            if avg_reward > self.best_reward:
+                self.best_reward = avg_reward
                 self.save_checkpoint(
                     episode,
                     "best_model.pt",
@@ -191,16 +209,18 @@ class Trainer:
                 )
 
         # Save final checkpoint
-        self.checkpoint_rewards[num_episodes - 1] = episode_reward
+        self.checkpoint_rewards[num_episodes - 1] = avg_reward
         self.save_checkpoint(
             num_episodes - 1,
             "latest_model.pt",
-            {"latest_reward": episode_reward},
+            {"latest_reward": avg_reward},
         )
 
+        self.plot_data()
+
         # Print summary
-        print(f"Training complete. Total frames: {self.total_frames}")
-        print(f"Best reward: {self.best_reward}")
-        print(f"Average reward: {np.mean(self.episodes_rewards)}")
-        print(f"Total episodes: {len(self.episodes_rewards)}")
+        print(f"Training complete. Total frames: {self.total_frames}", flush=True)
+        print(f"Best reward: {self.best_reward}", flush=True)
+        print(f"Average reward: {np.mean(self.episodes_rewards)}", flush=True)
+        print(f"Total episodes: {len(self.episodes_rewards)}", flush=True)
         return self.episodes_rewards

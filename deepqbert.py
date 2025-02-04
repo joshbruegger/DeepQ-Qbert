@@ -1,9 +1,6 @@
 import argparse
 
-import numpy as np
-
 import globals as g
-import plotter
 from env_manager import EnvManager
 from model import DQN
 from replay_memory import ReplayMemory
@@ -46,6 +43,12 @@ parser.add_argument(
     action="store_true",
     help="Disable recording",
 )
+parser.add_argument(
+    "--output-dir",
+    type=str,
+    default="output",
+    help="Output directory",
+)
 args = parser.parse_args()
 
 # clean up the env name for the checkpoint directory
@@ -67,7 +70,7 @@ trainer = Trainer(
     env_manager=envManager,
     network=network,
     memory=memory,
-    checkpoint_dir=f"checkpoints/{env_name}",
+    output_dir=args.output_dir,
 )
 
 # Train the model
@@ -76,19 +79,6 @@ episodes_rewards = trainer.train(
     checkpoint_freq=args.checkpoint_freq,
     load_checkpoint_type=args.load_checkpoint,
     max_frames=args.max_frames,
-)
-
-plotter.plot_data(
-    x=np.arange(len(episodes_rewards)),
-    y=episodes_rewards,
-    config=plotter.PlotConfig(
-        title="Episode Rewards",
-        xlabel="Episode",
-        ylabel="Reward",
-        running_avg=True,
-        window_size=100,
-        filepath=f"plots/{env_name}/rewards_{len(episodes_rewards)}.png",
-    ),
 )
 
 # Close the environment
