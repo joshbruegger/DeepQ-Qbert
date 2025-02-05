@@ -33,8 +33,7 @@ class Trainer:
         self.episodes_rewards = np.array([])
         self.episodes_loss = np.array([])
         self.episodes_max_q = np.array([])
-        self.starting_episode = 0
-        self.checkpoint_rewards = {}
+        self.starting_episode = 1
         self.total_frames = 0
         self.best_reward = float("-inf")
 
@@ -58,7 +57,6 @@ class Trainer:
             self.episodes_max_q = np.array(checkpoint["episodes_max_q"])
             self.episodes_rewards = np.array(checkpoint["episodes_rewards"])
             self.starting_episode = checkpoint["episode"] + 1
-            self.checkpoint_rewards = checkpoint.get("checkpoint_rewards", {})
             self.total_frames = checkpoint.get("total_frames", 0)
 
     def save_checkpoint(
@@ -78,7 +76,6 @@ class Trainer:
             "episode": episode,
             "model_state_dict": state_dict,
             "episodes_rewards": self.episodes_rewards,
-            "checkpoint_rewards": self.checkpoint_rewards,
             "total_frames": self.total_frames,
             "episodes_loss": self.episodes_loss,
             "episodes_max_q": self.episodes_max_q,
@@ -149,6 +146,7 @@ class Trainer:
             if terminated or truncated:
                 break
 
+        torch.cuda.memory_summary()
         return avg_reward / (t + 1), avg_loss / (t + 1), avg_max_q / (t + 1), t + 1
 
     def train(
@@ -190,7 +188,6 @@ class Trainer:
 
             # Save periodic checkpoint
             if (episode + 1) % checkpoint_freq == 0:
-                self.checkpoint_rewards[episode] = avg_reward
                 self.save_checkpoint(
                     episode,
                     f"checkpoint_episode_{episode}.pt",
@@ -209,9 +206,8 @@ class Trainer:
                 )
 
         # Save final checkpoint
-        self.checkpoint_rewards[num_episodes - 1] = avg_reward
         self.save_checkpoint(
-            num_episodes - 1,
+            len(self.episodes_rewards),
             "latest_model.pt",
             {"latest_reward": avg_reward},
         )

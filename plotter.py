@@ -22,6 +22,8 @@ class PlotConfig:
     filepath: str = "plots/plot.png"
     line_colors: Dict[str, str] = None
     avg_colors: Dict[str, str] = None
+    # Dictionary mapping metric names to y-axis index (0 for primary, 1 for secondary, 2 for tertiary)
+    axis_mapping: Dict[str, int] = None
 
     def __post_init__(self):
         if self.line_colors is None:
@@ -35,6 +37,12 @@ class PlotConfig:
                 "rewards": "red",
                 "q_values": "darkgreen",
                 "losses": "darkorange",
+            }
+        if self.axis_mapping is None:
+            self.axis_mapping = {
+                "rewards": 0,
+                "q_values": 1,
+                "losses": 2,
             }
 
 
@@ -68,7 +76,7 @@ def plot_data(
     config: Optional[PlotConfig] = None,
 ) -> None:
     """
-    Plot multiple data series with optional running averages.
+    Plot multiple data series with optional running averages and multiple y-axes for different scales.
 
     Args:
         x: X-axis data
@@ -84,35 +92,69 @@ def plot_data(
 
     # Setup plot
     fig, ax = setup_plot(config)
+    
+    # Create additional y-axes if needed
+    axes = [ax]  # Primary axis
+    if any(axis_idx > 0 for axis_idx in config.axis_mapping.values()):
+        ax2 = ax.twinx()  # Secondary axis
+        axes.append(ax2)
+    if any(axis_idx > 1 for axis_idx in config.axis_mapping.values()):
+        # Create tertiary axis by offsetting the secondary axis
+        ax3 = ax.twinx()
+        ax3.spines["right"].set_position(("axes", 1.2))
+        axes.append(ax3)
+
+    # Store lines for legend
+    lines = []
+    labels = []
 
     # Plot each data series
     for series_name, y in data.items():
+        axis_idx = config.axis_mapping.get(series_name, 0)
+        current_ax = axes[axis_idx]
+        
         # Plot main data
-        sns.lineplot(
-            x=x,
-            y=y,
-            ax=ax,
+        line = current_ax.plot(
+            x, y,
             label=series_name.replace("_", " ").title(),
             color=config.line_colors.get(series_name, "blue"),
-        )
+        )[0]
+        lines.append(line)
+        labels.append(series_name.replace("_", " ").title())
 
         # Plot running average if enabled
         if config.running_avg:
             running_avg = calculate_running_average(y, config.window_size)
-            sns.lineplot(
-                x=x,
-                y=running_avg,
-                ax=ax,
+            avg_line = current_ax.plot(
+                x, running_avg,
                 label=f"Average {series_name.replace('_', ' ').title()}",
                 color=config.avg_colors.get(series_name, "red"),
-            )
+            )[0]
+            lines.append(avg_line)
+            labels.append(f"Average {series_name.replace('_', ' ').title()}")
+
+        # Set axis label based on the series
+        if axis_idx == 0:
+            current_ax.set_ylabel(series_name.replace("_", " ").title())
+        elif axis_idx == 1:
+            current_ax.set_ylabel(series_name.replace("_", " ").title())
+            current_ax.spines["right"].set_color(config.line_colors.get(series_name, "blue"))
+            current_ax.yaxis.label.set_color(config.line_colors.get(series_name, "blue"))
+            current_ax.tick_params(axis='y', colors=config.line_colors.get(series_name, "blue"))
+        elif axis_idx == 2:
+            current_ax.set_ylabel(series_name.replace("_", " ").title())
+            current_ax.spines["right"].set_color(config.line_colors.get(series_name, "green"))
+            current_ax.yaxis.label.set_color(config.line_colors.get(series_name, "green"))
+            current_ax.tick_params(axis='y', colors=config.line_colors.get(series_name, "green"))
+
+    # Add legend
+    fig.legend(lines, labels, loc="center right", bbox_to_anchor=(1.35, 0.5))
 
     # Ensure the directory exists
     save_path = Path(config.filepath)
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Finalize and save plot
-    plt.legend()
     plt.tight_layout()
-    fig.savefig(save_path)
+    fig.savefig(save_path, bbox_inches='tight')
     plt.close(fig)  # Clean up resources

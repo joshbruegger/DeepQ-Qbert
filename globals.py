@@ -1,9 +1,4 @@
-import os
-
 import torch
-
-# Set memory management environment variables
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512,expandable_segments:True"
 
 QUEUE_N_FRAMES = 4
 
@@ -24,12 +19,5 @@ DEVICE = torch.device(
     if torch.backends.mps.is_available()
     else "cpu"
 )
-
-# Configure PyTorch to be more memory efficient
-torch.backends.cudnn.benchmark = True
-if torch.cuda.is_available():
-    torch.cuda.empty_cache()
-    # Set memory allocator settings
-    torch.cuda.set_per_process_memory_fraction(0.8)  # Use only 80% of available memory
 
 print(f"Using device: {DEVICE}", flush=True)

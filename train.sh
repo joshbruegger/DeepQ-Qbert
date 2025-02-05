@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=1
 #SBATCH --job-name=deepqbert
 #SBATCH --output=train-%j.log
 #SBATCH --time=02:00:00
@@ -8,16 +9,22 @@
 export PYTHONUNBUFFERED=TRUE
 
 # Get arguments from command line
-while getopts ":e:" opt; do
+REINSTALL=false
+while getopts ":e:r" opt; do
     case ${opt} in
         e)
             ENV_NAME=$OPTARG
+            ;;
+        r)
+            REINSTALL=true
             ;;
     esac
 done
 
 if [ -z "$ENV_NAME" ]; then
-    echo "Usage: $0 -e <env_name>"
+    echo "Usage: $0 -e <env_name> [-r]"
+    echo "  -e: Environment name (pong or qbert)"
+    echo "  -r: Reinstall environment by removing existing folder"
     exit 1
 fi
 
@@ -44,12 +51,20 @@ export PATH=$HOME/.local/bin:$PATH
 # Sanitize environment name for folder naming
 SANITIZED_ENV_NAME=$(echo "$ENV_NAME" | tr -cd '[:alnum:]_.-')
 
+# If reinstall flag is set, remove the existing environment directory
+if [ "$REINSTALL" = true ] && [ -d "$HOME/.deepqbert/$SANITIZED_ENV_NAME" ]; then
+    echo "Removing existing environment directory..."
+    rm -rf "$HOME/.deepqbert/$SANITIZED_ENV_NAME"
+fi
+
 # create the environment directory if it doesn't exist
 mkdir -p $HOME/.deepqbert/$SANITIZED_ENV_NAME
 
+echo "Copying working directory to ~/.deepqbert..."
 # copy the working directory to the HOME/.deepqbert space except for the .venv, __pycache__, .git, logs, and videos directories
-rsync -av --exclude='.venv' --exclude='__pycache__' --exclude='.git' --exclude='logs' --exclude='videos' $(pwd)/* $HOME/.deepqbert/$SANITIZED_ENV_NAME/
+rsync -av --exclude='output' --exclude='.venv' --exclude='__pycache__' --exclude='.git' --exclude='logs' --exclude='videos' $(pwd)/* $HOME/.deepqbert/$SANITIZED_ENV_NAME/
 
+echo "Changing directory to ~/.deepqbert/$SANITIZED_ENV_NAME"
 cd $HOME/.deepqbert/$SANITIZED_ENV_NAME
 
 echo "Setting up environment..."
@@ -60,6 +75,6 @@ echo "Syncing packages..."
 uv sync
 
 echo "Running training script..."
-uv run python -u deepqbert.py --load-checkpoint latest --num-episodes 10000000 --checkpoint-freq 20 --max-frames 10000000 --env-name $ENV_NAME --no-recording --output-dir $START_DIR/output/$SANITIZED_ENV_NAME
+uv run python -u deepqbert.py --load-checkpoint latest --num-episodes 10000000 --checkpoint-freq 10 --max-frames 10000000 --env-name $ENV_NAME --no-recording --output-dir $START_DIR/output/$SANITIZED_ENV_NAME
 
 deactivate
