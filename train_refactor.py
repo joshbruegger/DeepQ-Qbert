@@ -1,3 +1,4 @@
+import os
 import random
 import time
 
@@ -19,33 +20,28 @@ def train(
     num_frames: int,
     env_name: str,
     num_envs: int,
-    record: bool = False,
-    run_name: str = None,
-    checkpoint_type: str = None,
-    log_interval: int = 100,
-    save_interval: int = 1000,
-    warmup_frames: int = 8000,
-    max_frames: int = None,
-    batch_size: int = 32,
-    lr: float = 1e-4,
-    gamma: float = 0.99,
-    eps_start: float = 1,
-    eps_end: float = 0.1,
-    eps_decay: int = 1000000,
-    memory_size: int = 1000000,
-    output_dir: str = "output",
+    record: bool,
+    checkpoint_type: str,
+    log_interval: int,
+    save_interval: int,
+    warmup_frames: int,
+    max_frames: int,
+    batch_size: int,
+    lr: float,
+    gamma: float,
+    eps_start: float,
+    eps_end: float,
+    eps_decay: int,
+    memory_size: int,
+    output_dir: str,
 ):
     print(f"Training on {env_name} with {num_envs} environments", flush=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if not run_name:
-        run_name = time.strftime("%Y%m%d_%H%M%S")
-
+    run_name = time.strftime("%Y-%m-%d_%H:%M:%S")
     envs = make_envs(env_name, num_envs, record, run_name, f"{output_dir}/videos")
     network = DQN(4, envs.single_action_space.n).to(device)
-
-    print("test", flush=True)
 
     optimizer = torch.optim.RMSprop(network.parameters(), lr=lr)
     loss_fn = torch.nn.functional.mse_loss
@@ -59,15 +55,16 @@ def train(
         handle_timeout_termination=False,
     )
 
-    print("test2", flush=True)
-
     start_frame = 0
     start_log_dict = {}
     output_dir = f"{output_dir}/{env_name.replace('/', '_')}"
     plots_dir = f"{output_dir}/plots"
+    ckpt_dir = f"{output_dir}/checkpoints"
+
+    os.makedirs(plots_dir, exist_ok=True)
+    os.makedirs(ckpt_dir, exist_ok=True)
 
     # Load checkpoint if specified
-    ckpt_dir = f"{output_dir}/checkpoints"
     if checkpoint_type and checkpoint_type in ["best", "latest"]:
         ckpt_path = f"{ckpt_dir}/{checkpoint_type}_model.pth"
 
@@ -121,6 +118,7 @@ def train(
         actual_next_obs = next_obs.copy()
         for i, done in enumerate(terminated):
             if done:
+                print(infos.keys())
                 actual_next_obs[i] = infos["next_observation"][i]
 
         # Store transition in replay memory
@@ -135,9 +133,13 @@ def train(
 
         # Sample a batch of transitions from the replay memory
         batch = replay_memory.sample(batch_size)
-        expected_q_values = batch.rewards.flatten() + (
-            batch.next_observations * gamma * (1 - batch.dones.flatten())
-        )
+
+        # Compute the target Q-values
+        with torch.no_grad():
+            max_estimate, _ = network(batch.next_observations).max(dim=1)
+            target_q_values = batch.rewards.flatten() + gamma * max_estimate * (
+                1 - batch.dones.flatten()
+            )
 
         # Predict the Q-values
         predicted_q_values = (
@@ -145,7 +147,7 @@ def train(
         )
 
         # Compute the loss
-        loss = loss_fn(expected_q_values, predicted_q_values)
+        loss = loss_fn(target_q_values, predicted_q_values)
 
         optimizer.zero_grad()
         loss.backward()
@@ -155,12 +157,13 @@ def train(
 
         if frame % log_interval == 0:
             fps = int(frame / (time.time() - start_time))
+            log_q_values = predicted_q_values.mean().item()
             logger.log("loss", frame, loss)
-            logger.log("q_values", frame, predicted_q_values.mean().item())
+            logger.log("q_values", frame, log_q_values)
             logger.log("FPS", frame, fps)
             logger.save_plot(plots_dir, f"frame_{frame}")
 
-            print(f"FPS: {fps}", flush=True)
+            print(f"Frame: {frame}, q_values: {log_q_values}, FPS: {fps}", flush=True)
 
         if frame % save_interval == 0:
             torch.save(

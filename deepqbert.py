@@ -17,16 +17,76 @@ parser.add_argument(
     help="Load from checkpoint: best model, latest model, or none",
 )
 parser.add_argument(
-    "--num-episodes",
+    "--num-frames",
     type=int,
-    default=5,
-    help="Number of episodes to train for",
+    default=10000000,
+    help="Number of frames to train for",
 )
 parser.add_argument(
-    "--checkpoint-freq",
+    "--lr",
+    type=float,
+    default=1e-4,
+    help="Learning rate",
+)
+parser.add_argument(
+    "--num-envs",
     type=int,
-    default=2,
+    default=1,
+    help="Number of environments to train on",
+)
+parser.add_argument(
+    "--memory-size",
+    type=int,
+    default=1000000,
+    help="the replay memory size",
+)
+parser.add_argument(
+    "--gamma",
+    type=float,
+    default=0.99,
+    help="the discount factor gamma",
+)
+parser.add_argument(
+    "--batch-size",
+    type=int,
+    default=32,
+    help="the batch size of sample from the reply memory",
+)
+parser.add_argument(
+    "--eps-start",
+    type=float,
+    default=1,
+    help="the starting epsilon",
+)
+parser.add_argument(
+    "--eps-end",
+    type=float,
+    default=0.1,
+    help="the ending epsilon",
+)
+parser.add_argument(
+    "--eps-decay",
+    type=int,
+    default=1000000,
+    help="the last frame of the epsilon decay",
+)
+parser.add_argument(
+    "--warmup-frames",
+    type=int,
+    default=8000,
+    help="the number of frames to warm up for",
+)
+parser.add_argument(
+    "--save-interval",
+    type=int,
+    default=1000,
     help="Save checkpoint every N episodes",
+)
+parser.add_argument(
+    "--log-interval",
+    type=int,
+    default=100,
+    help="Log interval",
 )
 parser.add_argument(
     "--max-frames",
@@ -41,9 +101,10 @@ parser.add_argument(
     help="Environment name. Can be: ALE/Pong-v5, ALE/BeamRider-v5, ALE/Qbert-v5, ALE/Breakout-v5, ALE/Seaquest-v5, ALE/Pong-v5",
 )
 parser.add_argument(
-    "--no-recording",
+    "--record",
     action="store_true",
-    help="Disable recording",
+    default=False,
+    help="Record videos",
 )
 parser.add_argument(
     "--output-dir",
@@ -62,23 +123,23 @@ args = parser.parse_args()
 # network = DQN(g.MEMORY_SIZE, envManager.env.action_space.n).to(g.DEVICE)
 
 train_refactor.train(
-    num_frames=1000000,
+    num_frames=args.num_frames,
     env_name=args.env_name,
-    num_envs=1,
-    record=not args.no_recording,
+    num_envs=args.num_envs,
+    record=args.record,
     checkpoint_type=args.load_checkpoint,
-    log_interval=1,
-    save_interval=10,
-    warmup_frames=10,
+    log_interval=args.log_interval,
+    save_interval=args.save_interval,
+    warmup_frames=args.warmup_frames,
     max_frames=args.max_frames,
-    batch_size=32,
-    lr=1e-4,
-    gamma=0.99,
+    batch_size=args.batch_size,
+    lr=args.lr,
+    gamma=args.gamma,
     output_dir=args.output_dir,
-    eps_start=1,
-    eps_end=0.1,
-    eps_decay=1000000,
-    memory_size=1000000,
+    eps_start=args.eps_start,
+    eps_end=args.eps_end,
+    eps_decay=args.eps_decay,
+    memory_size=args.memory_size,
 )
 
 

@@ -23,7 +23,6 @@ def make_env(
     run_name: str = None,
     vid_dir: str = None,
 ):
-    print(f"DEBUG: Making env {idx}", flush=True)
     run_name = run_name.replace("/", "_")
 
     def maker_fn():
@@ -63,7 +62,6 @@ def make_envs(
     envs = gym.vector.SyncVectorEnv(
         [make_env(env_name, i, record, run_name, vid_dir) for i in range(num_envs)]
     )
-    print(f"DEBUG: Env {envs}", flush=True)
     assert isinstance(
         envs.single_action_space, gym.spaces.Discrete
     ), "Only discrete action spaces are supported"

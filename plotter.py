@@ -92,7 +92,7 @@ def plot_data(
 
     # Setup plot
     fig, ax = setup_plot(config)
-    
+
     # Create additional y-axes if needed
     axes = [ax]  # Primary axis
     if any(axis_idx > 0 for axis_idx in config.axis_mapping.values()):
@@ -112,10 +112,11 @@ def plot_data(
     for series_name, y in data.items():
         axis_idx = config.axis_mapping.get(series_name, 0)
         current_ax = axes[axis_idx]
-        
+
         # Plot main data
         line = current_ax.plot(
-            x, y,
+            x,
+            y,
             label=series_name.replace("_", " ").title(),
             color=config.line_colors.get(series_name, "blue"),
         )[0]
@@ -126,7 +127,8 @@ def plot_data(
         if config.running_avg:
             running_avg = calculate_running_average(y, config.window_size)
             avg_line = current_ax.plot(
-                x, running_avg,
+                x,
+                running_avg,
                 label=f"Average {series_name.replace('_', ' ').title()}",
                 color=config.avg_colors.get(series_name, "red"),
             )[0]
@@ -138,14 +140,26 @@ def plot_data(
             current_ax.set_ylabel(series_name.replace("_", " ").title())
         elif axis_idx == 1:
             current_ax.set_ylabel(series_name.replace("_", " ").title())
-            current_ax.spines["right"].set_color(config.line_colors.get(series_name, "blue"))
-            current_ax.yaxis.label.set_color(config.line_colors.get(series_name, "blue"))
-            current_ax.tick_params(axis='y', colors=config.line_colors.get(series_name, "blue"))
+            current_ax.spines["right"].set_color(
+                config.line_colors.get(series_name, "blue")
+            )
+            current_ax.yaxis.label.set_color(
+                config.line_colors.get(series_name, "blue")
+            )
+            current_ax.tick_params(
+                axis="y", colors=config.line_colors.get(series_name, "blue")
+            )
         elif axis_idx == 2:
             current_ax.set_ylabel(series_name.replace("_", " ").title())
-            current_ax.spines["right"].set_color(config.line_colors.get(series_name, "green"))
-            current_ax.yaxis.label.set_color(config.line_colors.get(series_name, "green"))
-            current_ax.tick_params(axis='y', colors=config.line_colors.get(series_name, "green"))
+            current_ax.spines["right"].set_color(
+                config.line_colors.get(series_name, "green")
+            )
+            current_ax.yaxis.label.set_color(
+                config.line_colors.get(series_name, "green")
+            )
+            current_ax.tick_params(
+                axis="y", colors=config.line_colors.get(series_name, "green")
+            )
 
     # Add legend
     fig.legend(lines, labels, loc="center right", bbox_to_anchor=(1.35, 0.5))
@@ -156,5 +170,5 @@ def plot_data(
 
     # Finalize and save plot
     plt.tight_layout()
-    fig.savefig(save_path, bbox_inches='tight')
+    fig.savefig(save_path, bbox_inches="tight")
     plt.close(fig)  # Clean up resources
