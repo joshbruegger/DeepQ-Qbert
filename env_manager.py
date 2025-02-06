@@ -41,7 +41,7 @@ class EnvManager:
         self.env = ClipRewardEnv(self.env)
 
         self.env = ResizeObservation(self.env, (110, 84))
-        self.env = FrameStackObservation(self.env, g.QUEUE_N_FRAMES)
+        self.env = FrameStackObservation(self.env, g.MEMORY_SIZE)
 
     def setup_recording(self, frequency: int = 2):
         self.env = gym.wrappers.RecordVideo(

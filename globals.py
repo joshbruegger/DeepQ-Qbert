@@ -1,6 +1,6 @@
 import torch
 
-QUEUE_N_FRAMES = 4
+MEMORY_SIZE = 1000000
 
 BATCH_SIZE = 32
 LR = 1e-4  # Learning rate

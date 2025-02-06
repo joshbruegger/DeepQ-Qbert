@@ -1,10 +1,12 @@
 import argparse
 
-import globals as g
-from env_manager import EnvManager
-from model import DQN
-from replay_memory import ReplayMemory
-from train import Trainer
+# import globals as g
+import train_refactor
+
+# from env_manager import EnvManager
+# from model import DQN
+# from replay_memory import ReplayMemory
+# from train import Trainer
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Train DeepQbert")
@@ -51,35 +53,56 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-# clean up the env name for the checkpoint directory
-env_name = args.env_name.replace("/", "-")
+# # clean up the env name for the checkpoint directory
+# env_name = args.env_name.replace("/", "-")
 
-envManager = EnvManager(args.env_name)
+# envManager = EnvManager(args.env_name)
 
 # Make the network
-network = DQN(g.QUEUE_N_FRAMES, envManager.env.action_space.n).to(g.DEVICE)
+# network = DQN(g.MEMORY_SIZE, envManager.env.action_space.n).to(g.DEVICE)
 
-if not args.no_recording:
-    envManager.setup_recording(args.checkpoint_freq)
-
-# Make the memory
-memory = ReplayMemory(1000000)
-
-# Create trainer instance
-trainer = Trainer(
-    env_manager=envManager,
-    network=network,
-    memory=memory,
-    output_dir=args.output_dir,
-)
-
-# Train the model
-episodes_rewards = trainer.train(
-    num_episodes=args.num_episodes,
-    checkpoint_freq=args.checkpoint_freq,
-    load_checkpoint_type=args.load_checkpoint,
+train_refactor.train(
+    num_frames=1000000,
+    env_name=args.env_name,
+    num_envs=1,
+    record=not args.no_recording,
+    checkpoint_type=args.load_checkpoint,
+    log_interval=1,
+    save_interval=10,
+    warmup_frames=10,
     max_frames=args.max_frames,
+    batch_size=32,
+    lr=1e-4,
+    gamma=0.99,
+    output_dir=args.output_dir,
+    eps_start=1,
+    eps_end=0.1,
+    eps_decay=1000000,
+    memory_size=1000000,
 )
 
-# Close the environment
-envManager.env.close()
+
+# if not args.no_recording:
+#     envManager.setup_recording(args.checkpoint_freq)
+
+# # Make the memory
+# memory = ReplayMemory(1000000)
+
+# # Create trainer instance
+# trainer = Trainer(
+#     env_manager=envManager,
+#     network=network,
+#     memory=memory,
+#     output_dir=args.output_dir,
+# )
+
+# # Train the model
+# episodes_rewards = trainer.train(
+#     num_episodes=args.num_episodes,
+#     checkpoint_freq=args.checkpoint_freq,
+#     load_checkpoint_type=args.load_checkpoint,
+#     max_frames=args.max_frames,
+# )
+
+# # Close the environment
+# envManager.env.close()
