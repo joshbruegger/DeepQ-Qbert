@@ -21,7 +21,7 @@ def train(
     env_name: str,
     num_envs: int,
     record: bool,
-    checkpoint_type: str,
+    load_latest_ckpt: str,
     log_interval: int,
     save_interval: int,
     warmup_frames: int,
@@ -66,8 +66,8 @@ def train(
 
     # Load checkpoint if specified
     loaded_checkpoint = False
-    if checkpoint_type and checkpoint_type in ["best", "latest"]:
-        ckpt_path = ckpt_dir / f"{checkpoint_type}_model.pth"
+    if load_latest_ckpt:
+        ckpt_path = ckpt_dir / "latest_model.pth"
 
         print(f"Loading checkpoint from {ckpt_path}", flush=True)
         if ckpt_path.exists():
@@ -77,6 +77,7 @@ def train(
             loaded_checkpoint = True
             start_frame = checkpoint["frame"] + 1
             start_log_dict = checkpoint["log_dict"]
+            print(f"Starting from frame {start_frame}", flush=True)
         else:
             print(f"Checkpoint {ckpt_path} does not exist", flush=True)
     if not loaded_checkpoint:
