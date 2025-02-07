@@ -11,8 +11,6 @@ from stable_baselines3.common.atari_wrappers import (
     FireResetEnv,
 )
 
-import globals as g
-
 gym.register_envs(ale_py)  # Tell the IDE that ale_py is used
 
 
