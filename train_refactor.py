@@ -1,6 +1,6 @@
-import os
 import random
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -57,25 +57,29 @@ def train(
 
     start_frame = 0
     start_log_dict = {}
-    output_dir = f"{output_dir}/{env_name.replace('/', '_')}"
-    plots_dir = f"{output_dir}/plots"
-    ckpt_dir = f"{output_dir}/checkpoints"
+    output_dir = Path(output_dir).resolve() / env_name.replace("/", "_")
+    plots_dir = output_dir / "plots"
+    ckpt_dir = output_dir / "checkpoints"
 
-    os.makedirs(plots_dir, exist_ok=True)
-    os.makedirs(ckpt_dir, exist_ok=True)
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
 
     # Load checkpoint if specified
+    loaded_checkpoint = False
     if checkpoint_type and checkpoint_type in ["best", "latest"]:
-        ckpt_path = f"{ckpt_dir}/{checkpoint_type}_model.pth"
+        ckpt_path = ckpt_dir / f"{checkpoint_type}_model.pth"
 
+        print(f"Loading checkpoint from {ckpt_path}", flush=True)
         if ckpt_path.exists():
             checkpoint = torch.load(ckpt_path)
             network.load_state_dict(checkpoint["model_state_dict"])
             print(f"Loaded checkpoint from {ckpt_path}", flush=True)
-
+            loaded_checkpoint = True
             start_frame = checkpoint["frame"] + 1
             start_log_dict = checkpoint["log_dict"]
-    else:
+        else:
+            print(f"Checkpoint {ckpt_path} does not exist", flush=True)
+    if not loaded_checkpoint:
         print("No checkpoint specified, starting from scratch", flush=True)
 
     start_time = time.time()
@@ -115,11 +119,11 @@ def train(
 
         # When an episode terminates, the next observation is the initial observation of the next episode
         # We do not want this, as we want to store the final observation of the episode in the replay memory
+        # Not sure if this is ever used?
         actual_next_obs = next_obs.copy()
-        for i, done in enumerate(terminated):
-            if done:
-                print(infos.keys())
-                actual_next_obs[i] = infos["next_observation"][i]
+        for i, done in enumerate(truncated):
+            if done and "final_observation" in infos.keys():
+                actual_next_obs[i] = infos["final_observation"][i]
 
         # Store transition in replay memory
         replay_memory.add(obs, actual_next_obs, actions, rewards, terminated, infos)
@@ -172,7 +176,15 @@ def train(
                     "frame": frame,
                     "log_dict": logger.dict,
                 },
-                f"{ckpt_dir}/frame_{frame}.pth",
+                ckpt_dir / f"frame_{frame}.pth",
+            )
+            torch.save(
+                {
+                    "model_state_dict": network.state_dict(),
+                    "frame": frame,
+                    "log_dict": logger.dict,
+                },
+                ckpt_dir / "latest_model.pth",
             )
 
     print(
@@ -186,7 +198,7 @@ def train(
             "frame": frame,
             "log_dict": logger.dict,
         },
-        f"{ckpt_dir}/latest_model.pth",
+        ckpt_dir / "latest_model.pth",
     )
 
     fps = int(frame / (time.time() - start_time))

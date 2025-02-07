@@ -11,7 +11,7 @@ import train_refactor
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Train DeepQbert")
 parser.add_argument(
-    "--load-checkpoint",
+    "--load",
     choices=["best", "latest", "none"],
     default="none",
     help="Load from checkpoint: best model, latest model, or none",
@@ -73,19 +73,19 @@ parser.add_argument(
 parser.add_argument(
     "--warmup-frames",
     type=int,
-    default=8000,
+    default=1000,
     help="the number of frames to warm up for",
 )
 parser.add_argument(
     "--save-interval",
     type=int,
-    default=1000,
+    default=10000,
     help="Save checkpoint every N episodes",
 )
 parser.add_argument(
     "--log-interval",
     type=int,
-    default=100,
+    default=200,
     help="Log interval",
 )
 parser.add_argument(
@@ -127,7 +127,7 @@ train_refactor.train(
     env_name=args.env_name,
     num_envs=args.num_envs,
     record=args.record,
-    checkpoint_type=args.load_checkpoint,
+    checkpoint_type=args.load,
     log_interval=args.log_interval,
     save_interval=args.save_interval,
     warmup_frames=args.warmup_frames,
