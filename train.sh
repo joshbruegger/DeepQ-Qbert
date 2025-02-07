@@ -1,10 +1,9 @@
 #!/bin/bash
 #SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=1
 #SBATCH --job-name=deepqbert
 #SBATCH --output=train-%j.log
-#SBATCH --time=02:00:00
-#SBATCH --mem=20G
+#SBATCH --time=04:00:00
+#SBATCH --mem=30G
 
 export PYTHONUNBUFFERED=TRUE
 
@@ -62,13 +61,16 @@ mkdir -p $HOME/.deepqbert/$SANITIZED_ENV_NAME
 
 echo "Copying working directory to ~/.deepqbert..."
 # copy the working directory to the HOME/.deepqbert space except for the .venv, __pycache__, .git, logs, and videos directories
-rsync -av --exclude='output' --exclude='.venv' --exclude='__pycache__' --exclude='.git' --exclude='logs' --exclude='videos' $(pwd)/* $HOME/.deepqbert/$SANITIZED_ENV_NAME/
+rsync -av --exclude='output' --exclude='__pycache__' --exclude='.git' $(pwd)/* $HOME/.deepqbert/$SANITIZED_ENV_NAME/
 
 echo "Changing directory to ~/.deepqbert/$SANITIZED_ENV_NAME"
 cd $HOME/.deepqbert/$SANITIZED_ENV_NAME
 
 echo "Setting up environment..."
-uv venv
+# if the .venv directory doesn't exist, create it
+if [ ! -d ".venv" ]; then
+    uv venv
+fi
 source .venv/bin/activate
 
 echo "Syncing packages..."
