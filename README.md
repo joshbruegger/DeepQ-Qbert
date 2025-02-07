@@ -23,5 +23,5 @@ This project uses the [uv package manager](https://docs.astral.sh/uv/getting-sta
 
 3. Run the program:
    ```bash
-   python deepqbert.py
+   uv run deepqbert.py
    ```

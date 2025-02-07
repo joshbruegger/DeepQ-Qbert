@@ -1,12 +1,6 @@
 import argparse
 
-# import globals as g
-import train_refactor
-
-# from env_manager import EnvManager
-# from model import DQN
-# from replay_memory import ReplayMemory
-# from train import Trainer
+import train
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Train DeepQbert")
@@ -114,15 +108,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-# # clean up the env name for the checkpoint directory
-# env_name = args.env_name.replace("/", "-")
-
-# envManager = EnvManager(args.env_name)
-
-# Make the network
-# network = DQN(g.MEMORY_SIZE, envManager.env.action_space.n).to(g.DEVICE)
-
-train_refactor.train(
+train.train(
     num_frames=args.frames,
     env_name=args.env,
     num_envs=args.num_envs,
@@ -141,29 +127,3 @@ train_refactor.train(
     eps_decay=args.e_decay,
     memory_size=args.memory,
 )
-
-
-# if not args.no_recording:
-#     envManager.setup_recording(args.checkpoint_freq)
-
-# # Make the memory
-# memory = ReplayMemory(1000000)
-
-# # Create trainer instance
-# trainer = Trainer(
-#     env_manager=envManager,
-#     network=network,
-#     memory=memory,
-#     output_dir=args.output_dir,
-# )
-
-# # Train the model
-# episodes_rewards = trainer.train(
-#     num_episodes=args.num_episodes,
-#     checkpoint_freq=args.checkpoint_freq,
-#     load_checkpoint_type=args.load_checkpoint,
-#     max_frames=args.max_frames,
-# )
-
-# # Close the environment
-# envManager.env.close()

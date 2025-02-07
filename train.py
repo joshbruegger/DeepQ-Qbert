@@ -1,222 +1,215 @@
-from itertools import count
+import random
+import time
 from pathlib import Path
 
 import numpy as np
 import torch
+from stable_baselines3.common.buffers import ReplayBuffer
 
-import globals as g
-import plotter
-from env_manager import EnvManager
-from optimizer import optimize
-from replay_memory import ReplayMemory
+from envs import make_envs
+from logger import Logger
+from model import DQN
 
 
-class Trainer:
-    def __init__(
-        self,
-        env_manager: EnvManager,
-        network: torch.nn.Module,
-        memory: ReplayMemory,
-        output_dir: str = "output",
-    ):
-        self.env_manager = env_manager
-        self.network = network
-        self.memory = memory
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True, parents=True)
-        self.checkpoint_dir = Path(self.output_dir / "checkpoints")
-        self.checkpoint_dir.mkdir(exist_ok=True, parents=True)
-        self.plots_dir = Path(self.output_dir / "plots")
-        self.plots_dir.mkdir(exist_ok=True, parents=True)
+def epsilon(t, eps_start, eps_end, eps_decay):
+    slope = (eps_end - eps_start) / eps_decay
+    return max(slope * t + eps_start, eps_end)
 
-        # Training state
-        self.episodes_rewards = np.array([])
-        self.episodes_loss = np.array([])
-        self.episodes_max_q = np.array([])
-        self.starting_episode = 1
-        self.total_frames = 0
-        self.best_reward = float("-inf")
 
-    def load_checkpoint(self, checkpoint_type: str):
-        """Load a checkpoint of specified type (best/latest)"""
-        if checkpoint_type not in ["best", "latest"]:
-            return
+def train(
+    num_frames: int,
+    env_name: str,
+    num_envs: int,
+    record: bool,
+    load_latest_ckpt: str,
+    log_interval: int,
+    save_interval: int,
+    warmup_frames: int,
+    max_frames: int,
+    batch_size: int,
+    lr: float,
+    gamma: float,
+    eps_start: float,
+    eps_end: float,
+    eps_decay: int,
+    memory_size: int,
+    output_dir: str,
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Training on {env_name} with {num_envs} environments on {device}", flush=True)
 
-        checkpoint_file = (
-            "best_model.pt" if checkpoint_type == "best" else "latest_model.pt"
-        )
-        checkpoint_path = self.checkpoint_dir / checkpoint_file
+    run_name = time.strftime("%Y-%m-%d_%H:%M:%S")
+    envs = make_envs(env_name, num_envs, record, run_name, f"{output_dir}/videos")
+    network = DQN(4, envs.single_action_space.n).to(device)
 
-        if checkpoint_path.exists():
-            checkpoint = torch.load(checkpoint_path)
-            self.network.load_state_dict(checkpoint["model_state_dict"])
-            print(f"Loaded checkpoint from {checkpoint_path}", flush=True)
-            print(f"Last Episode: {checkpoint['episode']}", flush=True)
+    optimizer = torch.optim.RMSprop(network.parameters(), lr=lr)
+    loss_fn = torch.nn.functional.mse_loss
 
-            self.episodes_loss = np.array(checkpoint["episodes_loss"])
-            self.episodes_max_q = np.array(checkpoint["episodes_max_q"])
-            self.episodes_rewards = np.array(checkpoint["episodes_rewards"])
-            self.starting_episode = checkpoint["episode"] + 1
-            self.total_frames = checkpoint.get("total_frames", 0)
+    replay_memory = ReplayBuffer(
+        memory_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device,
+        optimize_memory_usage=True,
+        handle_timeout_termination=False,
+    )
 
-    def save_checkpoint(
-        self,
-        episode: int,
-        filename: str,
-        extra_data: dict = None,
-    ):
-        """Save a checkpoint with current training state"""
-        # Move model to CPU for saving to avoid GPU memory issues
-        if next(self.network.parameters()).is_cuda:
-            state_dict = {k: v.cpu() for k, v in self.network.state_dict().items()}
+    start_frame = 0
+    start_log_dict = {}
+    output_dir = Path(output_dir).resolve() / env_name.replace("/", "_")
+    plots_dir = output_dir / "plots"
+    ckpt_dir = output_dir / "checkpoints"
+
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load checkpoint if specified
+    loaded_checkpoint = False
+    if load_latest_ckpt:
+        ckpt_path = ckpt_dir / "latest_model.pth"
+
+        print(f"Loading checkpoint from {ckpt_path}", flush=True)
+        if ckpt_path.exists():
+            checkpoint = torch.load(ckpt_path)
+            network.load_state_dict(checkpoint["model_state_dict"])
+            print(f"Loaded checkpoint from {ckpt_path}", flush=True)
+            loaded_checkpoint = True
+            start_frame = checkpoint["frame"] + 1
+            start_log_dict = checkpoint["log_dict"]
+            print(f"Starting from frame {start_frame}", flush=True)
         else:
-            state_dict = self.network.state_dict()
+            print(f"Checkpoint {ckpt_path} does not exist", flush=True)
+    if not loaded_checkpoint:
+        print("No checkpoint specified, starting from scratch", flush=True)
 
-        checkpoint = {
-            "episode": episode,
-            "model_state_dict": state_dict,
-            "episodes_rewards": self.episodes_rewards,
-            "total_frames": self.total_frames,
-            "episodes_loss": self.episodes_loss,
-            "episodes_max_q": self.episodes_max_q,
-        }
-        if extra_data:
-            checkpoint.update(extra_data)
+    start_time = time.time()
+    logger = Logger(start_log_dict)
 
-        # save checkpoint
-        torch.save(checkpoint, self.checkpoint_dir / filename)
-        print(f"Saved checkpoint to {self.checkpoint_dir / filename}", flush=True)
+    # Get initial observations and start training loop
+    print("Starting training loop", flush=True)
+    obs, _ = envs.reset()
+    for frame in range(start_frame, start_frame + num_frames):
+        if max_frames is not None and frame >= max_frames:
+            print(f"\nStopping training: reached max frames ({max_frames})", flush=True)
+            break
 
-    def plot_data(self):
-        data = {
-            "rewards": self.episodes_rewards,
-            "q_values": self.episodes_max_q,
-            "losses": self.episodes_loss,
-        }
-        plotter.plot_data(
-            x=np.arange(len(self.episodes_rewards)),
-            data=data,
-            config=plotter.PlotConfig(
-                title="Training Metrics",
-                xlabel="Episode",
-                ylabel="Value",
-                running_avg=True,
-                window_size=100,
-                filepath=f"{self.plots_dir}/metrics_{len(self.episodes_rewards)}.png",
-            ),
-        )
-
-    def train_episode(self):
-        """Run a single training episode and return statistics"""
-        obs, _ = self.env_manager.env.reset()
-        state = torch.tensor(obs, dtype=torch.float32, device=g.DEVICE).unsqueeze(0)
-
-        avg_reward = 0
-        avg_loss = 0
-        avg_max_q = 0
-
-        for t in count():
-            # Select and perform action
-            with torch.no_grad():
-                action = self.env_manager.select_action(state, self.network)
-            observation, reward, terminated, truncated, _ = self.env_manager.env.step(
-                action.item()
+        # Select actions for each env, either random (eps probability) or from network
+        eps = epsilon(frame, eps_start, eps_end, eps_decay)
+        if random.random() < eps:
+            actions = np.array(
+                [envs.single_action_space.sample() for _ in range(envs.num_envs)]
             )
-            avg_reward += reward
+        else:
+            q_values = network(torch.Tensor(obs).to(device))  # TODO: No grad?
+            actions = torch.argmax(q_values, dim=1).cpu().numpy()
 
-            reward = torch.tensor([reward], device=g.DEVICE)
-            next_state = (
-                None
-                if terminated
-                else torch.tensor(
-                    observation, dtype=torch.float32, device=g.DEVICE
-                ).unsqueeze(0)
-            )
+        # Perform actions
+        next_obs, rewards, terminated, truncated, infos = envs.step(actions)
 
-            # Store transition and optimize
-            self.memory.push(state, action, next_state, reward)
-            state = next_state
-
-            if len(self.memory) >= g.BATCH_SIZE:
-                loss, max_q = optimize(self.network, self.memory)
-                if loss is not None and max_q is not None:
-                    avg_loss += loss
-                    avg_max_q += max_q
-
-            if terminated or truncated:
-                break
-
-        torch.cuda.memory_summary()
-        return avg_reward / (t + 1), avg_loss / (t + 1), avg_max_q / (t + 1), t + 1
-
-    def train(
-        self,
-        num_episodes: int,
-        checkpoint_freq: int = 100,
-        load_checkpoint_type: str = "none",
-        max_frames: int = None,
-    ):
-        """Main training loop"""
-        # Load checkpoint if specified
-        self.load_checkpoint(load_checkpoint_type)
-
-        for episode in range(
-            self.starting_episode, self.starting_episode + num_episodes
-        ):
-            # Check if we've exceeded max frames
-            if max_frames is not None and self.total_frames >= max_frames:
+        # Check if any envs are done and log data if so
+        if "final_info" in infos:
+            for info in infos["final_info"]:
+                if "episode" not in info:
+                    # If episode is not done, continue
+                    continue
                 print(
-                    f"\nStopping training - reached {self.total_frames} frames (max: {max_frames})",
+                    f"Episode ended at frame {frame}, reward {info['episode']['r']}",
                     flush=True,
                 )
-                break
+                logger.log("reward", frame, info["episode"]["r"])
+                logger.log("length", frame, info["episode"]["l"])
+                logger.log("epsilon", frame, eps)
 
-            # Run episode
-            avg_reward, avg_loss, avg_max_q, steps = self.train_episode()
-            self.total_frames += steps
+        # When an episode terminates, the next observation is the initial observation of the next episode
+        # We do not want this, as we want to store the final observation of the episode in the replay memory
+        # Not sure if this is ever used?
+        actual_next_obs = next_obs.copy()
+        for i, done in enumerate(truncated):
+            if done and "final_observation" in infos.keys():
+                actual_next_obs[i] = infos["final_observation"][i]
 
-            # Update statistics
-            self.episodes_rewards = np.append(self.episodes_rewards, avg_reward)
-            self.episodes_loss = np.append(self.episodes_loss, avg_loss)
-            self.episodes_max_q = np.append(self.episodes_max_q, avg_max_q)
+        # Store transition in replay memory
+        replay_memory.add(obs, actual_next_obs, actions, rewards, terminated, infos)
 
-            print(
-                f"Episode: {episode}, Duration: {steps}, Frames: {self.total_frames}, "
-                f"Loss: {avg_loss:.4f}, Max Q: {avg_max_q:.4f}, Reward: {avg_reward:.4f}",
-                flush=True,
+        # update observation for next iteration
+        obs = next_obs
+
+        # Now we can optimize the network, but not before the warmup frames
+        if frame < warmup_frames:
+            continue
+
+        # Sample a batch of transitions from the replay memory
+        batch = replay_memory.sample(batch_size)
+
+        # Compute the target Q-values
+        with torch.no_grad():
+            max_estimate, _ = network(batch.next_observations).max(dim=1)
+            target_q_values = batch.rewards.flatten() + gamma * max_estimate * (
+                1 - batch.dones.flatten()
             )
 
-            # Save periodic checkpoint
-            if (episode + 1) % checkpoint_freq == 0:
-                self.save_checkpoint(
-                    episode,
-                    f"checkpoint_episode_{episode}.pt",
-                    {"current_reward": avg_reward},
-                )
-
-                self.plot_data()
-
-            # Save best model
-            if avg_reward > self.best_reward:
-                self.best_reward = avg_reward
-                self.save_checkpoint(
-                    episode,
-                    "best_model.pt",
-                    {"best_reward": self.best_reward},
-                )
-
-        # Save final checkpoint
-        self.save_checkpoint(
-            len(self.episodes_rewards),
-            "latest_model.pt",
-            {"latest_reward": avg_reward},
+        # Predict the Q-values
+        predicted_q_values = (
+            network(batch.observations).gather(1, batch.actions).squeeze()
         )
 
-        self.plot_data()
+        # Compute the loss
+        loss = loss_fn(target_q_values, predicted_q_values)
 
-        # Print summary
-        print(f"Training complete. Total frames: {self.total_frames}", flush=True)
-        print(f"Best reward: {self.best_reward}", flush=True)
-        print(f"Average reward: {np.mean(self.episodes_rewards)}", flush=True)
-        print(f"Total episodes: {len(self.episodes_rewards)}", flush=True)
-        return self.episodes_rewards
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # Log and save if necessary
+
+        if frame % log_interval == 0:
+            fps = int(frame / (time.time() - start_time))
+            log_q_values = predicted_q_values.mean().item()
+            logger.log("loss", frame, loss.mean().item())
+            logger.log("q_values", frame, log_q_values)
+            logger.log("fps", frame, fps)
+            logger.log("rewards", frame, rewards.mean().item())
+            logger.save_plot(plots_dir / f"{run_name}.png", ["q_values"])
+
+            print(f"Frame: {frame}, q_values: {log_q_values}, FPS: {fps}", flush=True)
+
+        if frame % save_interval == 0:
+            torch.save(
+                {
+                    "model_state_dict": network.state_dict(),
+                    "frame": frame,
+                    "log_dict": logger.dict,
+                },
+                ckpt_dir / f"frame_{frame}.pth",
+            )
+            torch.save(
+                {
+                    "model_state_dict": network.state_dict(),
+                    "frame": frame,
+                    "log_dict": logger.dict,
+                },
+                ckpt_dir / "latest_model.pth",
+            )
+
+    print(
+        f"Training complete in {time.time() - start_time} seconds ({frame} frames)",
+        flush=True,
+    )
+
+    torch.save(
+        {
+            "model_state_dict": network.state_dict(),
+            "frame": frame,
+            "log_dict": logger.dict,
+        },
+        ckpt_dir / "latest_model.pth",
+    )
+
+    fps = int(frame / (time.time() - start_time))
+    logger.log("loss", frame, loss.mean().item())
+    logger.log("q_values", frame, predicted_q_values.mean().item())
+    logger.save_plot(plots_dir / f"{run_name}.png")
+
+    envs.close()
+
+    return logger
