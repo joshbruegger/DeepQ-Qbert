@@ -4,3 +4,4 @@ checkpoints
 plots
 *.log
 .venv
+output

@@ -75,6 +75,6 @@ echo "Syncing packages..."
 uv sync
 
 echo "Running training script..."
-uv run python -u deepqbert.py --load-checkpoint latest --num-episodes 10000000 --checkpoint-freq 10 --max-frames 10000000 --env-name $ENV_NAME --no-recording --output-dir $START_DIR/output/$SANITIZED_ENV_NAME
+uv run python -u deepqbert.py --resume --frames 10000000 --env $ENV_NAME --output $START_DIR/output/$SANITIZED_ENV_NAME
 
 deactivate

@@ -17,7 +17,7 @@ parser.add_argument(
     help="Resume training from latest checkpoint",
 )
 parser.add_argument(
-    "--num-frames",
+    "--frames",
     type=int,
     default=10000000,
     help="Number of frames to train for",
@@ -35,7 +35,7 @@ parser.add_argument(
     help="Number of environments to train on",
 )
 parser.add_argument(
-    "--memory-size",
+    "--memory",
     type=int,
     default=1000000,
     help="the replay memory size",
@@ -47,31 +47,31 @@ parser.add_argument(
     help="the discount factor gamma",
 )
 parser.add_argument(
-    "--batch-size",
+    "--batch",
     type=int,
     default=32,
     help="the batch size of sample from the reply memory",
 )
 parser.add_argument(
-    "--eps-start",
+    "--e-start",
     type=float,
     default=1,
     help="the starting epsilon",
 )
 parser.add_argument(
-    "--eps-end",
+    "--e-end",
     type=float,
     default=0.1,
     help="the ending epsilon",
 )
 parser.add_argument(
-    "--eps-decay",
+    "--e-decay",
     type=int,
     default=1000000,
     help="the last frame of the epsilon decay",
 )
 parser.add_argument(
-    "--warmup-frames",
+    "--warmup",
     type=int,
     default=1000,
     help="the number of frames to warm up for",
@@ -95,7 +95,7 @@ parser.add_argument(
     help="Maximum number of frames to train for (default: no limit)",
 )
 parser.add_argument(
-    "--env-name",
+    "--env",
     type=str,
     default="ALE/Pong-v5",
     help="Environment name. Can be: ALE/Pong-v5, ALE/BeamRider-v5, ALE/Qbert-v5, ALE/Breakout-v5, ALE/Seaquest-v5, ALE/Pong-v5",
@@ -107,7 +107,7 @@ parser.add_argument(
     help="Record videos",
 )
 parser.add_argument(
-    "--output-dir",
+    "--output",
     type=str,
     default="output",
     help="Output directory",
@@ -123,23 +123,23 @@ args = parser.parse_args()
 # network = DQN(g.MEMORY_SIZE, envManager.env.action_space.n).to(g.DEVICE)
 
 train_refactor.train(
-    num_frames=args.num_frames,
-    env_name=args.env_name,
+    num_frames=args.frames,
+    env_name=args.env,
     num_envs=args.num_envs,
     record=args.record,
     load_latest_ckpt=args.resume,
     log_interval=args.log_interval,
     save_interval=args.save_interval,
-    warmup_frames=args.warmup_frames,
+    warmup_frames=args.warmup,
     max_frames=args.max_frames,
-    batch_size=args.batch_size,
+    batch_size=args.batch,
     lr=args.lr,
     gamma=args.gamma,
-    output_dir=args.output_dir,
-    eps_start=args.eps_start,
-    eps_end=args.eps_end,
-    eps_decay=args.eps_decay,
-    memory_size=args.memory_size,
+    output_dir=args.output,
+    eps_start=args.e_start,
+    eps_end=args.e_end,
+    eps_decay=args.e_decay,
+    memory_size=args.memory,
 )
 
 
