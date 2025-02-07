@@ -27,23 +27,11 @@ class PlotConfig:
 
     def __post_init__(self):
         if self.line_colors is None:
-            self.line_colors = {
-                "rewards": "blue",
-                "q_values": "green",
-                "losses": "orange",
-            }
+            self.line_colors = {}
         if self.avg_colors is None:
-            self.avg_colors = {
-                "rewards": "red",
-                "q_values": "darkgreen",
-                "losses": "darkorange",
-            }
+            self.avg_colors = {}
         if self.axis_mapping is None:
-            self.axis_mapping = {
-                "rewards": 0,
-                "q_values": 1,
-                "losses": 2,
-            }
+            self.axis_mapping = {}
 
 
 def setup_plot(config: PlotConfig) -> Tuple[plt.Figure, plt.Axes]:
@@ -76,11 +64,11 @@ def plot_data(
     config: Optional[PlotConfig] = None,
 ) -> None:
     """
-    Plot multiple data series with optional running averages and multiple y-axes for different scales.
+    Plot multiple data series with running averages and multiple y-axes for different scales.
 
     Args:
         x: X-axis data
-        data: Dictionary containing data series to plot (e.g., {"rewards": [...], "q_values": [...], "losses": [...]})
+        data: Dictionary containing data series to plot
         config: Plot configuration settings
     """
     if config is None:
@@ -93,12 +81,26 @@ def plot_data(
     # Setup plot
     fig, ax = setup_plot(config)
 
-    # Create additional y-axes if needed
+    # If axis_mapping is not provided, create a default mapping
+    if not config.axis_mapping:
+        config.axis_mapping = {name: idx for idx, name in enumerate(data.keys())}
+
+    # If colors are not provided, generate them
+    if not config.avg_colors:
+        # Use a color map to generate distinct colors
+        colors = plt.cm.rainbow(np.linspace(0, 1, len(data)))
+        config.avg_colors = {name: colors[i] for i, name in enumerate(data.keys())}
+
+    # Determine which axes are actually needed based on the data being plotted
+    needed_axes = set(config.axis_mapping[series] for series in data.keys())
+    max_axis_idx = max(needed_axes)
+
+    # Create all necessary axes
     axes = [ax]  # Primary axis
-    if any(axis_idx > 0 for axis_idx in config.axis_mapping.values()):
+    if max_axis_idx >= 1:
         ax2 = ax.twinx()  # Secondary axis
         axes.append(ax2)
-    if any(axis_idx > 1 for axis_idx in config.axis_mapping.values()):
+    if max_axis_idx >= 2:
         # Create tertiary axis by offsetting the secondary axis
         ax3 = ax.twinx()
         ax3.spines["right"].set_position(("axes", 1.2))
@@ -108,58 +110,35 @@ def plot_data(
     lines = []
     labels = []
 
+    # Sort data series to ensure consistent plotting order
+    sorted_data = dict(sorted(data.items(), key=lambda x: config.axis_mapping[x[0]]))
+
     # Plot each data series
-    for series_name, y in data.items():
+    for series_name, y in sorted_data.items():
         axis_idx = config.axis_mapping.get(series_name, 0)
         current_ax = axes[axis_idx]
 
-        # Plot main data
-        line = current_ax.plot(
+        # Plot running average
+        running_avg = calculate_running_average(y, config.window_size)
+        avg_line = current_ax.plot(
             x,
-            y,
-            label=series_name.replace("_", " ").title(),
-            color=config.line_colors.get(series_name, "blue"),
+            running_avg,
+            label=f"{series_name.replace('_', ' ').title()}",
+            color=config.avg_colors.get(series_name),
         )[0]
-        lines.append(line)
-        labels.append(series_name.replace("_", " ").title())
+        lines.append(avg_line)
+        labels.append(f"{series_name.replace('_', ' ').title()}")
 
-        # Plot running average if enabled
-        if config.running_avg:
-            running_avg = calculate_running_average(y, config.window_size)
-            avg_line = current_ax.plot(
-                x,
-                running_avg,
-                label=f"Average {series_name.replace('_', ' ').title()}",
-                color=config.avg_colors.get(series_name, "red"),
-            )[0]
-            lines.append(avg_line)
-            labels.append(f"Average {series_name.replace('_', ' ').title()}")
-
-        # Set axis label based on the series
+        # Set axis label and color based on the series
+        current_ax.set_ylabel(series_name.replace("_", " ").title())
         if axis_idx == 0:
-            current_ax.set_ylabel(series_name.replace("_", " ").title())
-        elif axis_idx == 1:
-            current_ax.set_ylabel(series_name.replace("_", " ").title())
-            current_ax.spines["right"].set_color(
-                config.line_colors.get(series_name, "blue")
-            )
-            current_ax.yaxis.label.set_color(
-                config.line_colors.get(series_name, "blue")
-            )
-            current_ax.tick_params(
-                axis="y", colors=config.line_colors.get(series_name, "blue")
-            )
-        elif axis_idx == 2:
-            current_ax.set_ylabel(series_name.replace("_", " ").title())
-            current_ax.spines["right"].set_color(
-                config.line_colors.get(series_name, "green")
-            )
-            current_ax.yaxis.label.set_color(
-                config.line_colors.get(series_name, "green")
-            )
-            current_ax.tick_params(
-                axis="y", colors=config.line_colors.get(series_name, "green")
-            )
+            current_ax.spines["left"].set_color(config.avg_colors[series_name])
+            current_ax.yaxis.label.set_color(config.avg_colors[series_name])
+            current_ax.tick_params(axis="y", colors=config.avg_colors[series_name])
+        else:
+            current_ax.spines["right"].set_color(config.avg_colors[series_name])
+            current_ax.yaxis.label.set_color(config.avg_colors[series_name])
+            current_ax.tick_params(axis="y", colors=config.avg_colors[series_name])
 
     # Add legend
     fig.legend(lines, labels, loc="center right", bbox_to_anchor=(1.35, 0.5))

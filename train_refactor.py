@@ -113,7 +113,10 @@ def train(
                 if "episode" not in info:
                     # If episode is not done, continue
                     continue
-                print(f"Frame {frame}, reward {info['episode']['r']}", flush=True)
+                print(
+                    f"Episode ended at frame {frame}, reward {info['episode']['r']}",
+                    flush=True,
+                )
                 logger.log("reward", frame, info["episode"]["r"])
                 logger.log("length", frame, info["episode"]["l"])
                 logger.log("epsilon", frame, eps)
@@ -163,10 +166,11 @@ def train(
         if frame % log_interval == 0:
             fps = int(frame / (time.time() - start_time))
             log_q_values = predicted_q_values.mean().item()
-            logger.log("loss", frame, loss)
+            logger.log("loss", frame, loss.mean().item())
             logger.log("q_values", frame, log_q_values)
-            logger.log("FPS", frame, fps)
-            logger.save_plot(plots_dir, f"frame_{frame}")
+            logger.log("fps", frame, fps)
+            logger.log("rewards", frame, rewards.mean().item())
+            logger.save_plot(plots_dir / f"{run_name}.png", ["q_values"])
 
             print(f"Frame: {frame}, q_values: {log_q_values}, FPS: {fps}", flush=True)
 
@@ -203,9 +207,8 @@ def train(
     )
 
     fps = int(frame / (time.time() - start_time))
-    logger.log("loss", frame, loss)
+    logger.log("loss", frame, loss.mean().item())
     logger.log("q_values", frame, predicted_q_values.mean().item())
-    logger.log("FPS", frame, fps)
-    logger.save_plot(plots_dir, f"frame_{frame}")
+    logger.save_plot(plots_dir / f"{run_name}.png")
 
     return logger
